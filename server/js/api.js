@@ -66,21 +66,53 @@ let demoMessages = [
 
 /* ----------------------------- Přihlášení / profil ---------------------------- */
 
-/** Připojení k rodině – uloží relaci. */
+/** Připojení k rodině přes kód – data jsou na serveru, takže se vidí z více zařízení. */
 export async function joinFamily({ familyId, familyName, userName, userAvatar, location }) {
-  await wait(120);
-  // TODO: return fetch(`${API_BASE}/auth/pripojit`, { method:'POST', ... }).then(r => r.json());
-  const session = {
-    familyId,
-    familyName: familyName || DEMO_FAMILIES.find((f) => f.id === familyId)?.name || familyId,
-    memberId: 'me',
+  await wait(100);
+  const previous = store.getSession();
+  const payload = {
+    code: familyId,
+    familyName: familyName || familyId,
+    location: location || 'Praha',
     userName: userName || 'Já',
     userAvatar: userAvatar || 'px-boy',
-    location: location || 'Praha'
+    memberId: previous?.familyId === familyId ? previous.memberId : null
   };
-  store.setSession(session);
-  return session;
+  try {
+    const res = await fetch(`${API_BASE}/rodina/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const session = {
+      familyId: data.familyId,
+      familyName: data.familyName,
+      memberId: data.memberId,
+      userName: payload.userName,
+      userAvatar: payload.userAvatar,
+      location: data.location
+    };
+    store.setSession(session);
+    return session;
+  } catch {
+    // offline fallback – data zůstanou jen v tomto zařízení
+    const session = {
+      familyId,
+      familyName: familyName || familyId,
+      memberId: previous?.familyId === familyId ? previous.memberId : `local_${Date.now()}`,
+      userName: payload.userName,
+      userAvatar: payload.userAvatar,
+      location: payload.location
+    };
+    store.setSession(session);
+    return session;
+  }
 }
+
+/** ID aktuálního člena (pro rozlišení vlastních zpráv). */
+export function getMyId() { return store.getSession()?.memberId || 'me'; }
 
 export function getSession() { return store.getSession(); }
 
@@ -98,13 +130,23 @@ export function getProfile() {
 /** Město/obec rodiny – použije se pro počasí. */
 export function getLocation() { return store.getSession()?.location || 'Praha'; }
 
-export function updateLocation(location) {
-  // TODO: fetch(`${API_BASE}/rodina/lokace`, { method:'PUT', ... })
+export async function updateLocation(location) {
+  const s = store.getSession();
+  fetch(`${API_BASE}/rodina/lokace`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ code: s?.familyId, location })
+  }).catch(() => {});
   return store.saveProfile({ location });
 }
 
-export function updateProfile({ name, avatar }) {
-  // TODO: return fetch(`${API_BASE}/profily/me`, { method:'PUT', ... }).then(r => r.json());
+export async function updateProfile({ name, avatar }) {
+  const s = store.getSession();
+  fetch(`${API_BASE}/rodina/profil`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ code: s?.familyId, memberId: s?.memberId, name, avatar })
+  }).catch(() => {});
   return store.saveProfile({ userName: name, userAvatar: avatar });
 }
 
@@ -126,23 +168,36 @@ export async function getDashboard() {
   };
 }
 
-/** Členové rodiny (id -> jméno, avatar). */
+/** Členové rodiny (id -> jméno, avatar) – sdílení ze serveru. */
 export async function getMembers() {
-  await wait(40);
-  // TODO: return fetch(`${API_BASE}/rodina/clenove`, { headers: authHeaders() }).then(r => r.json());
-  const custom = Object.fromEntries(store.getData().members.map((m) => [m.id, m]));
-  return {
-    ...FAMILY,
-    ...custom,
-    me: getProfile()
-  };
+  const s = store.getSession();
+  try {
+    const res = await fetch(`${API_BASE}/rodina/state?code=${encodeURIComponent(s?.familyId || '')}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const map = Object.fromEntries(data.members.map((m) => [m.id, m]));
+    map.me = { ...getProfile(), id: s?.memberId };
+    return map;
+  } catch {
+    const custom = Object.fromEntries(store.getData().members.map((m) => [m.id, m]));
+    return { ...FAMILY, ...custom, me: getProfile() };
+  }
 }
 
-/** Přidat člena rodiny. */
+/** Přidat člena rodiny (sdílené na serveru). */
 export async function addMember({ name, avatar }) {
-  await wait(100);
-  // TODO: return fetch(`${API_BASE}/rodina/clenove`, { method:'POST', ... }).then(r => r.json());
-  return store.addMember({ id: `c${Date.now()}`, name, avatar: avatar || 'px-person' });
+  const s = store.getSession();
+  try {
+    const res = await fetch(`${API_BASE}/rodina/clen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ code: s?.familyId, name, avatar: avatar || 'px-person' })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).member;
+  } catch {
+    return store.addMember({ id: `c${Date.now()}`, name, avatar: avatar || 'px-person' });
+  }
 }
 
 /** Události kalendáře – pole { id, date:'RRRR-MM-DD', time, title, place? }. */
@@ -168,23 +223,34 @@ export async function getPhotos() {
   return DEMO_PHOTOS;
 }
 
-/** Zprávy rodinného chatu – pole { id, from, text, at } (from: 'me' nebo id člena). */
+/** Zprávy rodinného chatu – sdílené ze serveru podle kódu rodiny. */
 export async function getMessages() {
-  await wait();
-  // TODO: return fetch(`${API_BASE}/chat/zpravy`, { headers: authHeaders() }).then(r => r.json());
-  return demoMessages;
+  const s = store.getSession();
+  try {
+    const res = await fetch(`${API_BASE}/rodina/state?code=${encodeURIComponent(s?.familyId || '')}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).messages;
+  } catch {
+    return demoMessages;
+  }
 }
 
-/** Odeslat zprávu. Server: POST, tady jen přidáme do lokálního demo pole. */
+/** Odeslat zprávu do sdíleného chatu rodiny. */
 export async function sendMessage(text, attachment = null) {
-  await wait(80);
-  // TODO: return fetch(`${API_BASE}/chat/zpravy`, {
-  //   method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-  //   body: JSON.stringify({ text, attachment })
-  // }).then(r => r.json());
-  const msg = { id: Date.now(), from: 'me', text, at: new Date().toISOString(), attachment };
-  demoMessages.push(msg);
-  return msg;
+  const s = store.getSession();
+  const local = { id: Date.now(), from: getMyId(), text, at: new Date().toISOString(), attachment };
+  try {
+    const res = await fetch(`${API_BASE}/rodina/zprava`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ code: s?.familyId, memberId: s?.memberId, text, attachment })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).message;
+  } catch {
+    demoMessages.push(local);
+    return local;
+  }
 }
 
 /** Aktuální počasí + předpověď. */
@@ -277,13 +343,21 @@ export async function getGroqKeyStatus() {
 
 /** Poslat konverzaci AI asistentovi (přes server, klíč neopouští server). */
 export async function askAI(messages) {
-  const res = await fetch(`${API_BASE}/ai/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ messages })
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/ai/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ messages })
+    });
+  } catch {
+    throw new Error('AI server není dostupný – spusťte node server.js (ne Python) a zkontrolujte API_BASE.');
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.ok) throw new Error(data.error || 'Server vrátil ' + res.status);
+  if (!res.ok || !data.ok) {
+    const detail = data.error || (typeof data === 'string' ? data : '');
+    throw new Error(detail ? String(detail) : `Server vrátil ${res.status}. Zkontrolujte, že běží node server.js a API_BASE končí na /api.`);
+  }
   return data.text;
 }
 
@@ -353,6 +427,34 @@ export async function getNotifications() {
     { id: 'n2', icon: 'calendar', title: 'Událost dnes', text: '18:30 – Rodinná večeře', at: 'dnes' },
     { id: 'n3', icon: 'image', title: 'Nová fotka', text: 'Eliška přidala fotku do galerie', at: 'včera' }
   ];
+}
+
+/* ---------------------------------- TV -------------------------------------- */
+
+/** Historie příkazů odeslaných na televizi. */
+export async function getTvItems() {
+  try {
+    const res = await fetch(`${API_BASE}/tv`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).items;
+  } catch { return []; }
+}
+
+/** Odeslat na televizi: oznámení, fotku, video nebo požadavek na sdílení obrazovky. */
+export async function sendToTv(payload) {
+  try {
+    const res = await fetch(`${API_BASE}/tv`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return { item: (await res.json()).item, local: false };
+  } catch {
+    const item = { id: `tv_local_${Date.now()}`, ...payload, at: new Date().toISOString() };
+    store.addTvItem(item);
+    return { item, local: true };
+  }
 }
 
 /* ------------------------------- Demo zdroje -------------------------------- */

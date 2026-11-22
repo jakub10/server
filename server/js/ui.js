@@ -1,5 +1,6 @@
 import { icon } from './icons.js';
-import { PIXEL_AVATARS, pixelData } from './pixel.js';
+import { PIXEL_AVATARS, pixelData, PALETTE, customToken, rowsFromToken } from './pixel.js';
+import { addCustomAvatar, getCustomAvatars } from './store.js';
 import { escapeHtml } from './utils.js';
 
 /** Otevře modální okno. onMount dostane prvek okna pro připojení vlastních listenerů. */
@@ -56,16 +57,29 @@ export function attachmentHtml(att) {
   return `<a class="chat-attach" href="${escapeHtml(url)}" target="_blank" rel="noopener">${icon(glyph)} ${escapeHtml(name)}</a>`;
 }
 
-/** Pole s výběrem pixel-art avataru. Vrátí HTML; hodnota se čte z input[name=avatar]. */
+/* ---------------------------- Pixel avatar výběr ---------------------------- */
+
+export function renderAvatarOptions(selected = 'px-boy') {
+  const custom = getCustomAvatars();
+  return `
+    ${PIXEL_AVATARS.map((p) => `
+      <button type="button" class="avatar-option pixel-option ${p.id === selected ? 'selected' : ''}" data-avatar="${p.id}" title="${p.label}">
+        <img src="${pixelData(p.id)}" alt="${p.label}">
+      </button>`).join('')}
+    ${custom.map((a, i) => `
+      <button type="button" class="avatar-option pixel-option ${a.token === selected ? 'selected' : ''}" data-avatar="${escapeHtml(a.token)}" title="Vlastní avatar ${i + 1}">
+        <img src="${pixelData(a.token)}" alt="Vlastní avatar">
+      </button>`).join('')}
+    <button type="button" class="avatar-make-btn" data-action="make-avatar" title="Vytvořit vlastní pixel art">${icon('plus')}<span>Vytvořit</span></button>`;
+}
+
+/** Pole s výběrem pixel-art avataru. */
 export function avatarPicker(selected = 'px-boy') {
   return `
     <div class="avatar-picker" data-avatar-picker>
-      ${PIXEL_AVATARS.map((p) => `
-        <button type="button" class="avatar-option pixel-option ${p.id === selected ? 'selected' : ''}" data-avatar="${p.id}" title="${p.label}">
-          <img src="${pixelData(p.id)}" alt="${p.label}">
-        </button>`).join('')}
+      ${renderAvatarOptions(selected)}
     </div>
-    <input type="hidden" name="avatar" value="${selected}">`;
+    <input type="hidden" name="avatar" value="${escapeHtml(selected)}">`;
 }
 
 /** Připojí obsluhu výběru avataru uvnitř daného kontejneru. */
@@ -76,6 +90,96 @@ export function bindAvatarPicker(root) {
       btn.classList.add('selected');
       const hidden = root.querySelector('input[name="avatar"]');
       if (hidden) hidden.value = btn.dataset.avatar;
+    });
+  });
+  root.querySelectorAll('[data-action="make-avatar"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const hidden = root.querySelector('input[name="avatar"]');
+      openAvatarMaker(hidden?.value || 'px-boy');
+    });
+  });
+}
+
+/** Editor vlastního pixel-art avataru (12×12 bodů). */
+export function openAvatarMaker(current = 'px-boy', onSaved) {
+  let rows = current.startsWith('pxc:')
+    ? rowsFromToken(current)
+    : Array.from({ length: 12 }, () => '.'.repeat(12));
+  let color = 'x';
+
+  const paletteKeys = Object.keys(PALETTE).filter((k) => PALETTE[k]);
+  const cells = () => rows.map((row, y) => [...row].map((ch, x) =>
+    `<button type="button" class="px-cell" data-x="${x}" data-y="${y}" style="background:${PALETTE[ch] || 'transparent'}"></button>`
+  ).join('')).join('');
+
+  openModal('Vytvořit pixel avatar', `
+    <p class="modal-text">Klikáním malujte avatar. Vyberte barvu, pak jednotlivé čtverečky.</p>
+    <div class="px-editor">
+      <div class="px-grid" id="px-grid">${cells()}</div>
+      <div class="px-side">
+        <div class="px-preview"><img id="px-preview-img" src="" alt="Náhled"></div>
+        <div class="px-palette">
+          ${paletteKeys.map((k) => `<button type="button" class="px-color ${k === color ? 'selected' : ''}" data-color="${k}" style="background:${PALETTE[k]}" title="${k}"></button>`).join('')}
+          <button type="button" class="px-color px-empty ${color === '.' ? 'selected' : ''}" data-color="." title="Průhledné">×</button>
+        </div>
+        <div class="px-tools">
+          <button type="button" class="btn btn-ghost btn-sm" id="px-clear">Vymazat</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="px-fill">Vyplnit</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-close>Zrušit</button>
+      <button type="button" class="btn btn-primary" id="px-save">${icon('check')} Uložit avatar</button>
+    </div>`, (box) => {
+    const grid = box.querySelector('#px-grid');
+    const preview = box.querySelector('#px-preview-img');
+    const refreshPreview = () => { preview.src = pixelData(customToken(rows)); };
+    refreshPreview();
+
+    const paint = (btn) => {
+      const x = Number(btn.dataset.x);
+      const y = Number(btn.dataset.y);
+      rows[y] = rows[y].slice(0, x) + color + rows[y].slice(x + 1);
+      btn.style.background = PALETTE[color] || 'transparent';
+      refreshPreview();
+    };
+    grid.addEventListener('click', (e) => {
+      const btn = e.target.closest('.px-cell');
+      if (btn) paint(btn);
+    });
+
+    box.querySelectorAll('[data-color]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        color = btn.dataset.color;
+        box.querySelectorAll('[data-color]').forEach((b) => b.classList.toggle('selected', b === btn));
+      });
+    });
+
+    box.querySelector('#px-clear').addEventListener('click', () => {
+      rows = Array.from({ length: 12 }, () => '.'.repeat(12));
+      grid.innerHTML = cells();
+      refreshPreview();
+    });
+    box.querySelector('#px-fill').addEventListener('click', () => {
+      rows = Array.from({ length: 12 }, () => color.repeat(12));
+      grid.innerHTML = cells();
+      refreshPreview();
+    });
+
+    box.querySelector('#px-save').addEventListener('click', () => {
+      const token = customToken(rows);
+      addCustomAvatar({ id: token, token, name: 'Vlastní avatar' });
+      const picker = document.querySelector('[data-avatar-picker]');
+      if (picker) {
+        picker.innerHTML = renderAvatarOptions(token);
+        const hidden = picker.parentElement.querySelector('input[name="avatar"]');
+        if (hidden) hidden.value = token;
+        bindAvatarPicker(document);
+      }
+      closeModal();
+      toast('Vlastní pixel avatar byl vytvořen.');
+      onSaved?.(token);
     });
   });
 }

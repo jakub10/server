@@ -1,5 +1,5 @@
 import { icon } from '../icons.js';
-import { DEMO_FAMILIES, joinFamily } from '../api.js';
+import { joinFamily } from '../api.js';
 import { navigate } from '../app.js';
 import { avatarPicker, bindAvatarPicker, toast } from '../ui.js';
 import { escapeHtml } from '../utils.js';

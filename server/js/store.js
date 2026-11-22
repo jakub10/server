@@ -37,7 +37,7 @@ export function saveProfile(patch) {
 
 /* ------------------------------- Ostatní data ------------------------------ */
 
-const EMPTY = { events: [], members: [], bugReports: [], photos: [], files: [], prefs: { notifications: true, notificationsSeen: false } };
+const EMPTY = { events: [], members: [], bugReports: [], photos: [], files: [], tv: [], customAvatars: [], prefs: { notifications: true, notificationsSeen: false } };
 
 export function getData() { return { ...EMPTY, ...read(DATA_KEY, {}) }; }
 function setData(data) { write(DATA_KEY, data); }
@@ -91,6 +91,24 @@ export function addFile(file) {
   return file;
 }
 export function getFilesLocal() { return getData().files; }
+
+/** Příkazy pro TV (lokální záloha). */
+export function addTvItem(item) {
+  const data = getData();
+  data.tv.unshift(item);
+  setData(data);
+  return item;
+}
+export function getTvItemsLocal() { return getData().tv; }
+
+/** Vlastní pixel-art avatary vytvořené v editoru. */
+export function addCustomAvatar(avatar) {
+  const data = getData();
+  data.customAvatars.push(avatar);
+  setData(data);
+  return avatar;
+}
+export function getCustomAvatars() { return getData().customAvatars; }
 
 /** Groq API klíč – lokální záloha, hlavní úložiště je save/ na serveru. */
 export function saveGroqKey(key) { write(GROQ_KEY, { key }); }

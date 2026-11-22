@@ -26,7 +26,14 @@ const PATTERNS = {
   sea:    ['........', '..bb..bb', '.bbbbbb.', 'bbbbbbbb', '..bb..bb', '.bbbbbb.', 'bbbbbbbb', '........'],
   flower: ['..p..p..', '.pp.pp..', '..ppp...', '.pypyp..', '..ppp...', '..yppy..', '...gg...', '...gg...'],
   balloon:['..yyyy..', '.yyyyyy.', 'yyyyyyyy', '.yyyyyy.', '..yyyy..', '...yy...', '...xx...', '...xx...'],
-  heart:  ['.pp..pp.', 'pppppppp', 'pppppppp', '.pppppp.', '..pppp..', '...pp...', '........', '........']
+  heart:  ['.pp..pp.', 'pppppppp', 'pppppppp', '.pppppp.', '..pppp..', '...pp...', '........', '........'],
+  bee:    ['...xx...', '..yxxy..', '.xxxxxx.', 'x.xxxx.x', 'xxxxxxxx', '.xxxxxx.', '..x..x..', '........'],
+  fish:   ['........', '..bbbb..', '.bbbbbb.', 'bbbxbbbb', '.bbbbbb.', '..bbbb..', '........', '........'],
+  moon:   ['...yy...', '..yyyy..', '.yyy....', '.yy.....', '.yy.....', '.yyy....', '..yyyy..', '...yy...'],
+  cloud:  ['........', '..wwww..', '.wwwwww.', 'wwwwwwww', 'wwwwwwww', '.wwwwww.', '........', '........'],
+  gift:   ['.rrrrrr.', 'rrrrrrrr', '.pppppp.', 'ppyppppp', '.pppppp.', 'rrrrrrrr', '.rrrrrr.', '........'],
+  cake:   ['........', '...rr...', '..rrrr..', '.wwwwww.', 'wwwwwwww', 'wwwwwwww', '.wwwwww.', '.xxxxxx.'],
+  book:   ['........', '.wwwwww.', 'wxwwwwwx', 'wxwwwwwx', 'wxwwwwwx', '.wwwwww.', '.xxxxxx.', '........']
 };
 
 /* Avatary: buď postavička (skin/hair/body), nebo jeden z vzorů výše. */
@@ -43,7 +50,19 @@ const TYPES = {
   'px-flower':   { label: 'Pixel květina',  glyph: 'flower' },
   'px-star':     { label: 'Pixel hvězda',   glyph: 'star' },
   'px-balloon':  { label: 'Pixel balon',    glyph: 'balloon' },
-  'px-heart':    { label: 'Pixel srdce',    glyph: 'heart' }
+  'px-heart':    { label: 'Pixel srdce',    glyph: 'heart' },
+  'px-baby':     { label: 'Pixel miminko',  skin: '#f7c8a8', hair: '#c98b52', body: '#ffd166' },
+  'px-teen':     { label: 'Pixel teen',     skin: '#eab98f', hair: '#22243a', body: '#27ae60' },
+  'px-chef':     { label: 'Pixel kuchař',   skin: '#f2c49b', hair: '#ffffff', body: '#ffffff' },
+  'px-doctor':   { label: 'Pixel doktor',   skin: '#f2c49b', hair: '#3a2f26', body: '#e8f4ff' },
+  'px-knight':   { label: 'Pixel rytíř',    skin: '#e8b98f', hair: '#9aa3c4', body: '#8b93ab' },
+  'px-bee':      { label: 'Pixel včela',    glyph: 'bee' },
+  'px-fish':     { label: 'Pixel ryba',     glyph: 'fish' },
+  'px-moon':     { label: 'Pixel měsíc',    glyph: 'moon' },
+  'px-cloud':    { label: 'Pixel mrak',     glyph: 'cloud' },
+  'px-gift':     { label: 'Pixel dárek',    glyph: 'gift' },
+  'px-cake':     { label: 'Pixel dort',     glyph: 'cake' },
+  'px-book':     { label: 'Pixel kniha',    glyph: 'book' }
 };
 
 export const PIXEL_AVATARS = Object.entries(TYPES).map(([id, v]) => ({ id, label: v.label }));
@@ -58,6 +77,27 @@ function patternSvg(name) {
     : PATTERNS[name];
   if (!rows) return '';
   let s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges">';
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      const color = C[ch];
+      if (color) s += rect(x, y, 1, 1, color);
+    });
+  });
+  return s + '</svg>';
+}
+
+export const PALETTE = C;
+export const CUSTOM_PREFIX = 'pxc:';
+
+export function customToken(rows) { return CUSTOM_PREFIX + rows.join('/'); }
+
+export function rowsFromToken(token) {
+  const parts = String(token || '').replace(CUSTOM_PREFIX, '').split('/');
+  return Array.from({ length: 12 }, (_, i) => (parts[i] || '').padEnd(12, '.').slice(0, 12));
+}
+
+function customSvg(rows) {
+  let s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" shape-rendering="crispEdges">';
   rows.forEach((row, y) => {
     [...row].forEach((ch, x) => {
       const color = C[ch];
@@ -94,6 +134,8 @@ function svgData(key, svg) {
 }
 
 export function pixelData(id) {
+  if (!id) return '';
+  if (id.startsWith(CUSTOM_PREFIX)) return svgData('custom:' + id, customSvg(rowsFromToken(id)));
   if (!TYPES[id]) return '';
   return svgData('avatar:' + id, buildSvg(id));
 }

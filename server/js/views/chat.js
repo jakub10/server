@@ -1,5 +1,5 @@
 import { icon } from '../icons.js';
-import { getMessages, getMembers, sendMessage, uploadFile } from '../api.js';
+import { getMessages, getMembers, sendMessage, uploadFile, getMyId } from '../api.js';
 import { rerender } from '../app.js';
 import { escapeHtml, timeLabel } from '../utils.js';
 import { avatarHtml, renderText } from '../pixel.js';
@@ -14,7 +14,7 @@ export async function render() {
       <div class="chat-wrap">
         <div class="chat-scroll" id="chat-scroll">
           ${messages.map((m) => {
-            const me = m.from === 'me';
+            const me = m.from === 'me' || m.from === getMyId();
             const person = members[m.from] || { name: 'Člen rodiny', avatar: 'px-person' };
             return `
               <div class="msg ${me ? 'me' : ''}">
