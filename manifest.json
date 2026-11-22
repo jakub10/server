@@ -1,0 +1,20 @@
+{
+  "name": "Rodina – rodinná aplikace",
+  "short_name": "Rodina",
+  "description": "Kalendář, fotky, rodinný chat a počasí na jednom místě.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef1f8",
+  "theme_color": "#5b67f0",
+  "orientation": "portrait",
+  "lang": "cs",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
