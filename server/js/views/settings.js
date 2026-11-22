@@ -1,6 +1,7 @@
 import { icon } from '../icons.js';
-import { getMembers, addMember, updateProfile, leaveFamily, submitBugReport, getProfile, getLocation, updateLocation } from '../api.js';
+import { getMembers, addMember, updateProfile, leaveFamily, submitBugReport, getProfile, getLocation, updateLocation, getServerStatus, changeFamilyPassword } from '../api.js';
 import { THEMES, FONTS, ACCENTS, setAppearance } from '../appearance.js';
+import { saveFamilySettings } from '../api.js';
 import { getSession, getPrefs, savePrefs, getBugReports } from '../store.js';
 import { openModal, closeModal, toast, avatarPicker, bindAvatarPicker } from '../ui.js';
 import { rerender, navigate } from '../app.js';
@@ -15,6 +16,7 @@ export async function render() {
   const members = await getMembers();
   const prefs = getPrefs();
   const localReports = getBugReports().length;
+  const server = await getServerStatus();
 
   return `
     <div class="view">
@@ -40,6 +42,19 @@ export async function render() {
         <div class="setting-row clickable" data-action="location">
           <div class="setting-icon">${icon('sun')}</div>
           <div class="setting-text"><div class="s-label">Místo bydliště</div><div class="s-value">${escapeHtml(getLocation())} · pro počasí</div></div>
+          ${icon('chevronRight', 'row-chevron')}
+        </div>
+        <div class="setting-row">
+          <div class="setting-icon">${icon('file')}</div>
+          <div class="setting-text"><div class="s-label">Složka rodiny</div><div class="s-value mono">${escapeHtml(server.folder || session?.folder || 'lokální režim')}</div></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-icon">${icon(server.online ? 'check' : 'info')}</div>
+          <div class="setting-text"><div class="s-label">Server</div><div class="s-value">${server.online ? 'Připojeno – data jsou sdílená' : escapeHtml(server.error || 'Offline – data jen v tomto zařízení')}</div></div>
+        </div>
+        <div class="setting-row clickable" data-action="change-password">
+          <div class="setting-icon">${icon('flag')}</div>
+          <div class="setting-text"><div class="s-label">Změnit heslo rodiny</div><div class="s-value">Uloží se do heslo.txt</div></div>
           ${icon('chevronRight', 'row-chevron')}
         </div>
         <div class="setting-row clickable" data-action="switch-family">
@@ -155,7 +170,10 @@ export function mount() {
           e.preventDefault();
           const name = e.currentTarget.elements.name.value.trim();
           if (!name) return;
-          await addMember({ name, avatar: e.currentTarget.elements.avatar.value });
+          const avatar = e.currentTarget.elements.avatar.value
+            || e.currentTarget.querySelector('.avatar-option.selected')?.dataset.avatar
+            || 'px-person';
+          await addMember({ name, avatar });
           closeModal();
           rerender();
           toast(`${name} byl přidán do rodiny.`);
@@ -175,6 +193,31 @@ export function mount() {
         leaveFamily();
         closeModal();
         navigate('home');
+      });
+    });
+  });
+
+  document.querySelector('[data-action="change-password"]').addEventListener('click', () => {
+    openModal('Změnit heslo rodiny', `
+      <form id="password-form" class="form">
+        <p class="modal-text">Nové heslo se uloží do složky rodiny do souboru <b>heslo.txt</b>. Členové ho pak musí zadat při přihlášení.</p>
+        <div class="field"><label for="password-new">Nové heslo</label>
+          <input id="password-new" name="passwordNew" type="password" required autocomplete="new-password"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close>Zrušit</button>
+          <button type="submit" class="btn btn-primary">Uložit heslo</button>
+        </div>
+      </form>`, (box) => {
+      box.querySelector('#password-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await changeFamilyPassword(e.currentTarget.elements.passwordNew.value);
+          closeModal();
+          rerender();
+          toast('Heslo rodiny bylo změněno.');
+        } catch (err) {
+          toast(err.message);
+        }
       });
     });
   });
@@ -213,6 +256,7 @@ export function mount() {
   const pref = document.getElementById('pref-notifications');
   pref.addEventListener('change', () => {
     savePrefs({ notifications: pref.checked });
+    saveFamilySettings({ notifications: pref.checked });
     toast(pref.checked ? 'Oznámení zapnuta.' : 'Oznámení vypnuta.');
   });
 

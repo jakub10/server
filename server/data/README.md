@@ -1,10 +1,12 @@
-# data – sdílená data rodin a TV
+# data – sdílená data
 
-- `rodiny.json` – rodiny podle kódu. Každá rodina obsahuje `name`, `location`,
-  `members[]` a `messages[]`. Díky tomu se dvě zařízení se stejným kódem vidí
-  ve stejné rodině a sdílejí chat.
-- `tv.json` – historie příkazů odeslaných na televizi (oznámení, foto, video, sdílení obrazovky).
+- `rodiny/<KOD>/` – jedna složka pro každou rodinu:
+  - `heslo.txt` – heslo rodiny (ověřuje se při přihlášení)
+  - `nastaveni.json` – název, lokalita a nastavení odeslaná z aplikace
+  - `clenove.json` – členové rodiny
+  - `zpravy.json` – sdílený chat
+- `tv.json` – historie příkazů odeslaných na televizi.
 
-Kód rodiny funguje jako „heslo" – nikdo se bez něj nedostane dovnitř.
-V přihlášení už proto nejsou žádné předvolené rodiny k výběru.
-Soubory se vytvoří automaticky při prvním spuštění `node server.js`.
+Rodina se založí zadáním kódu + hesla; složka vznikne automaticky. Přihlášení
+projde jen se správným kódem **i** heslem. Všechna zařízení musí používat stejný
+server, jinak mají každé svou vlastní složku `data/rodiny/`.

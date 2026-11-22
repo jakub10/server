@@ -46,7 +46,21 @@ function rowHtml(item) {
     </div>`;
 }
 
+function photoStripHtml() {
+  const photos = items.filter((f) => category(f) === 'image');
+  if (!photos.length) return '<div class="empty">Žádné fotky.</div>';
+  return `<div class="photo-strip">${photos.map((f) => `
+    <a class="photo-strip-item" href="${escapeHtml(f.url)}" target="_blank" rel="noopener">
+      <img src="${escapeHtml(f.url)}" alt="${escapeHtml(f.name || 'Fotka')}">
+      <span>${renderText(f.name || 'Fotka')}</span>
+    </a>`).join('')}</div>`;
+}
+
 function renderList() {
+  const strip = document.getElementById('photo-strip-card');
+  if (strip) strip.innerHTML = photoStripHtml();
+  const photoCount = document.getElementById('photo-count');
+  if (photoCount) photoCount.textContent = String(items.filter((f) => category(f) === 'image').length);
   const host = document.getElementById('file-list');
   if (!host) return;
   const q = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -79,6 +93,12 @@ export async function render() {
       <div class="file-filter">
         ${FILTERS.map((f) => `<button class="filter-chip ${f.id === activeFilter ? 'active' : ''}" data-filter="${f.id}">${f.label}</button>`).join('')}
       </div>
+      <div class="section-head" style="margin-top:4px">
+        <h2>Fotky</h2>
+        <button class="link" data-action="open-gallery">Otevřít galerii ›</button>
+      </div>
+      <div class="card" id="photo-strip-card">${photoStripHtml()}</div>
+
       <div class="section-head" style="margin-top:4px">
         <h2>Všechny soubory</h2>
         <span class="pill" id="file-count">${items.length} souborů</span>
@@ -118,6 +138,8 @@ export function mount() {
     toast(`„${name}" odeslán do rodinného chatu.`);
     navigate('chat');
   });
+
+  document.querySelector('[data-action="open-gallery"]').addEventListener('click', () => navigate('photos'));
 
   document.querySelector('[data-action="add-file"]').addEventListener('click', () => {
     openModal('Přidat soubor', `

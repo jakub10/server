@@ -1,0 +1,7 @@
+[
+  { "id": "mamka", "name": "Mamka", "avatar": "px-woman" },
+  { "id": "tata", "name": "Táta", "avatar": "px-man" },
+  { "id": "eliska", "name": "Eliška", "avatar": "px-girl" },
+  { "id": "jirka", "name": "Jirka", "avatar": "px-boy" },
+  { "id": "babicka", "name": "Babička", "avatar": "px-grandma" }
+]

@@ -89,10 +89,10 @@ function patternSvg(name) {
 export const PALETTE = C;
 export const CUSTOM_PREFIX = 'pxc:';
 
-export function customToken(rows) { return CUSTOM_PREFIX + rows.join('/'); }
+export function customToken(rows) { return CUSTOM_PREFIX + rows.join('~'); }
 
 export function rowsFromToken(token) {
-  const parts = String(token || '').replace(CUSTOM_PREFIX, '').split('/');
+  const parts = String(token || '').replace(CUSTOM_PREFIX, '').split(/[~/]/);
   return Array.from({ length: 12 }, (_, i) => (parts[i] || '').padEnd(12, '.').slice(0, 12));
 }
 
@@ -150,12 +150,18 @@ export function glyphHtml(name) {
   return src ? `<img class="pixel-inline" src="${src}" alt="">` : '';
 }
 
+/** Mapa pro výběr smajlíků v chatu – vloží se znak, renderText ho změní na pixel art. */
+export const GLYPH_EMOJI = {
+  wave: '👋', camera: '📸', pin: '📍', chat: '💬', bot: '🤖', warn: '⚠️',
+  pasta: '🍝', thumb: '👍', rain: '🌦️', castle: '🏰', tree: '🎄', sea: '🌊',
+  flower: '🌻', balloon: '🎈', star: '⭐', heart: '❤️', bee: '🐝', fish: '🐟',
+  moon: '🌙', cloud: '☁️', gift: '🎁', cake: '🎂', book: '📖', person: '🙂'
+};
+
 /* Všechny smajlíky v textu se převedou na pixel art (i když přijdou ze serveru). */
 const EMOJI_GLYPH = {
-  '👋': 'wave', '📸': 'camera', '📷': 'camera', '📍': 'pin', '💬': 'chat',
-  '🤖': 'bot', '⚠️': 'warn', '⚠': 'warn', '🍝': 'pasta', '👍': 'thumb',
-  '🌦️': 'rain', '🌦': 'rain', '🏰': 'castle', '🎄': 'tree', '🌊': 'sea',
-  '🌻': 'flower', '🎈': 'balloon', '⭐': 'star', '🙂': 'person', '👤': 'person'
+  ...Object.fromEntries(Object.entries(GLYPH_EMOJI).map(([name, emoji]) => [emoji, name])),
+  '📷': 'camera', '⚠': 'warn', '🌦': 'rain', '👤': 'person'
 };
 
 export function renderText(value) {

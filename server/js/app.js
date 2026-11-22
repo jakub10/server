@@ -12,17 +12,18 @@ import * as photos from './views/photos.js';
 import * as chat from './views/chat.js';
 import * as weather from './views/weather.js';
 import * as files from './views/files.js';
+import * as tv from './views/tv.js';
 import * as settings from './views/settings.js';
 
-const views = { login, home, calendar, photos, chat, weather, files, ai, settings };
+const views = { login, home, calendar, photos, chat, weather, files, tv, ai, settings };
 
 const tabs = [
   { id: 'home', label: 'Domů', glyph: 'home' },
   { id: 'calendar', label: 'Kalendář', glyph: 'calendar' },
-  { id: 'photos', label: 'Fotky', glyph: 'image' },
   { id: 'chat', label: 'Chat', glyph: 'chat' },
   { id: 'weather', label: 'Počasí', glyph: 'sun' },
   { id: 'files', label: 'Soubory', glyph: 'file' },
+  { id: 'tv', label: 'TV', glyph: 'tv' },
   { id: 'ai', label: 'AI', glyph: 'sparkles' }
 ];
 

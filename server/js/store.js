@@ -110,6 +110,18 @@ export function addCustomAvatar(avatar) {
 }
 export function getCustomAvatars() { return getData().customAvatars; }
 
+/** Synchronizace pixel avatarů ze složky rodiny. */
+export function setFamilyAvatars(list) {
+  const data = getData();
+  const map = new Map();
+  [...data.customAvatars, ...(Array.isArray(list) ? list : [])].forEach((a) => {
+    if (a?.token) map.set(a.token, a);
+  });
+  data.customAvatars = [...map.values()];
+  setData(data);
+  return data.customAvatars;
+}
+
 /** Groq API klíč – lokální záloha, hlavní úložiště je save/ na serveru. */
 export function saveGroqKey(key) { write(GROQ_KEY, { key }); }
 export function getGroqKey() { return read(GROQ_KEY, {})?.key || ''; }

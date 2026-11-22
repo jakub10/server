@@ -30,14 +30,13 @@ export async function render() {
         </div>
         <div class="field">
           <label for="family-code" id="code-label">Kód rodiny</label>
-          <input id="family-code" name="familyId" type="text" placeholder="např. RODINA-2026" required autocomplete="organization">
+          <input id="family-code" name="familyId" type="text" placeholder="např. SVOBODOVI" required autocomplete="organization">
         </div>
-        <div class="family-chips">
-          ${DEMO_FAMILIES.map((f) => `
-            <button type="button" class="family-chip" data-code="${escapeHtml(f.id)}" data-name="${escapeHtml(f.name)}">
-              ${icon('usersSmall')} <span>${escapeHtml(f.name)}</span>
-            </button>`).join('')}
+        <div class="field" style="margin-top:12px">
+          <label for="family-password" id="password-label">Heslo rodiny</label>
+          <input id="family-password" name="password" type="password" placeholder="Heslo, které znají členové rodiny" required autocomplete="current-password">
         </div>
+        <p class="login-hint">Kód a heslo dostanete od správce rodiny. Bez obou se nikdo cizí nedostane dovnitř. Data rodiny se ukládají do složky <b>data/rodiny/&lt;kód&gt;/</b>.</p>
 
         <div class="login-step" style="margin-top:24px">2. Kde bydlíte?</div>
         <p class="login-hint">Podle místa se zobrazí přesnější počasí.</p>
@@ -76,22 +75,10 @@ export function mount() {
       card.classList.toggle('creating', mode === 'create');
       document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b === btn));
       document.getElementById('code-label').textContent = mode === 'create' ? 'Kód nové rodiny' : 'Kód rodiny';
+      document.getElementById('password-label').textContent = mode === 'create' ? 'Vytvořte heslo rodiny' : 'Heslo rodiny';
       submit.innerHTML = (mode === 'create' ? 'Založit rodinu' : 'Připojit se k rodině') + icon('chevronRight');
       document.getElementById('family-name').required = mode === 'create';
-      if (mode === 'create') {
-        document.querySelectorAll('[data-code]').forEach((c) => c.classList.remove('selected'));
-        codeInput.value = '';
-        codeInput.dataset.name = '';
-      }
-    });
-  });
-
-  document.querySelectorAll('[data-code]').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      document.querySelectorAll('[data-code]').forEach((c) => c.classList.remove('selected'));
-      chip.classList.add('selected');
-      codeInput.value = chip.dataset.code;
-      codeInput.dataset.name = chip.dataset.name;
+      if (mode === 'create') codeInput.value = '';
     });
   });
 
@@ -100,18 +87,26 @@ export function mount() {
     const form = e.currentTarget;
     const familyId = codeInput.value.trim();
     if (!familyId) return;
-    const selected = document.querySelector('[data-code].selected');
     const familyName = mode === 'create'
       ? (form.elements.familyName.value.trim() || familyId)
-      : (selected?.dataset.name || codeInput.dataset.name || familyId);
-    await joinFamily({
-      familyId,
-      familyName,
-      location: form.elements.location.value.trim() || 'Praha',
-      userName: form.elements.userName.value.trim() || 'Já',
-      userAvatar: form.elements.avatar.value || 'px-boy'
-    });
-    toast(mode === 'create' ? `Rodina ${familyName} byla založena!` : `Vítejte v rodině ${familyName}!`);
-    navigate('home');
+      : familyId;
+    try {
+      const session = await joinFamily({
+        familyId,
+        familyName,
+        create: mode === 'create',
+        password: form.elements.password.value,
+        location: form.elements.location.value.trim() || 'Praha',
+        userName: form.elements.userName.value.trim() || 'Já',
+        userAvatar: form.elements.avatar.value || 'px-boy'
+      });
+      toast(mode === 'create'
+        ? `Rodina ${familyName} založena. Složka: ${session.folder || familyId}`
+        : `Vítejte v rodině ${familyName}!`);
+      navigate('home');
+    } catch (err) {
+      toast(err.message);
+      form.elements.password.focus();
+    }
   });
 }

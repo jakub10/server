@@ -1,0 +1,59 @@
+{
+  "SVOBODOVI-NASAZUZKAMA2/5ROKOU": {
+    "name": "svobodovi-nasazuzkama2/5rokou",
+    "location": "Hradec Králové",
+    "members": [
+      {
+        "id": "mamka",
+        "name": "Mamka",
+        "avatar": "px-woman"
+      },
+      {
+        "id": "tata",
+        "name": "Táta",
+        "avatar": "px-man"
+      },
+      {
+        "id": "eliska",
+        "name": "Eliška",
+        "avatar": "px-girl"
+      },
+      {
+        "id": "jirka",
+        "name": "Jirka",
+        "avatar": "px-boy"
+      },
+      {
+        "id": "babicka",
+        "name": "Babička",
+        "avatar": "px-grandma"
+      },
+      {
+        "id": "m_mwrrch1qi9hk",
+        "name": "Zuzana",
+        "avatar": "px-girl"
+      }
+    ],
+    "messages": [
+      {
+        "id": "m1",
+        "from": "mamka",
+        "text": "Dobrý den všichni! Dnes večer máme doma večeři 🍝",
+        "at": "2026-11-22T10:40:43.214Z"
+      },
+      {
+        "id": "m2",
+        "from": "eliska",
+        "text": "Jdu domů ze školy, může mi někdo otevřít?",
+        "at": "2026-11-22T10:51:43.214Z"
+      },
+      {
+        "id": "m3",
+        "from": "tata",
+        "text": "V sobotu jedeme na výlet, nezapomeňte na pláštěnky 🌦️",
+        "at": "2026-11-22T11:20:43.214Z"
+      }
+    ],
+    "createdAt": "2026-11-22T11:32:43.214Z"
+  }
+}

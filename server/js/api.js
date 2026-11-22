@@ -67,7 +67,7 @@ let demoMessages = [
 /* ----------------------------- Přihlášení / profil ---------------------------- */
 
 /** Připojení k rodině přes kód – data jsou na serveru, takže se vidí z více zařízení. */
-export async function joinFamily({ familyId, familyName, userName, userAvatar, location }) {
+export async function joinFamily({ familyId, familyName, userName, userAvatar, location, password, create }) {
   await wait(100);
   const previous = store.getSession();
   const payload = {
@@ -76,39 +76,78 @@ export async function joinFamily({ familyId, familyName, userName, userAvatar, l
     location: location || 'Praha',
     userName: userName || 'Já',
     userAvatar: userAvatar || 'px-boy',
+    password: password || '',
+    create: !!create,
     memberId: previous?.familyId === familyId ? previous.memberId : null
   };
+  let res;
   try {
-    const res = await fetch(`${API_BASE}/rodina/join`, {
+    res = await fetch(`${API_BASE}/rodina/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    const session = {
-      familyId: data.familyId,
-      familyName: data.familyName,
-      memberId: data.memberId,
-      userName: payload.userName,
-      userAvatar: payload.userAvatar,
-      location: data.location
-    };
-    store.setSession(session);
-    return session;
   } catch {
-    // offline fallback – data zůstanou jen v tomto zařízení
-    const session = {
-      familyId,
-      familyName: familyName || familyId,
-      memberId: previous?.familyId === familyId ? previous.memberId : `local_${Date.now()}`,
-      userName: payload.userName,
-      userAvatar: payload.userAvatar,
-      location: payload.location
-    };
-    store.setSession(session);
-    return session;
+    throw new Error('Server není dostupný. Spusťte node server.js a otevřete aplikaci přes http://IP_SERVERU:8080 na obou zařízeních.');
   }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || `Server vrátil ${res.status}`);
+  const session = {
+    familyId: data.familyId,
+    familyName: data.familyName,
+    memberId: data.memberId,
+    userName: payload.userName,
+    userAvatar: payload.userAvatar,
+    location: data.location,
+    password: payload.password,
+    folder: data.folder
+  };
+  store.setSession(session);
+  return session;
+}
+
+/** Přihlašovací údaje rodiny pro ostatní volání. */
+function familyAuth(extra = {}) {
+  const s = store.getSession();
+  return { code: s?.familyId, password: s?.password || '', ...extra };
+}
+
+/** Je zařízení připojené ke sdílenému serveru? */
+export async function getServerStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/rodina/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(familyAuth())
+    });
+    const data = await res.json().catch(() => ({}));
+    return { online: res.ok && !!data.ok, folder: data.folder || null, error: data.error || null };
+  } catch {
+    return { online: false, folder: null, error: 'Server nedostupný' };
+  }
+}
+
+/** Nastavení rodiny uložená v její složce (nastaveni.json). */
+export async function saveFamilySettings(patch) {
+  try {
+    await fetch(`${API_BASE}/rodina/nastaveni`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(familyAuth({ nastaveni: patch }))
+    });
+  } catch { /* offline – ignorovat */ }
+}
+
+/** Změna hesla rodiny (přepíše data/rodiny/<KOD>/heslo.txt). */
+export async function changeFamilyPassword(passwordNew) {
+  const res = await fetch(`${API_BASE}/rodina/heslo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(familyAuth({ passwordNew }))
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || `Server vrátil ${res.status}`);
+  return store.saveProfile({ password: passwordNew });
 }
 
 /** ID aktuálního člena (pro rozlišení vlastních zpráv). */
@@ -135,7 +174,7 @@ export async function updateLocation(location) {
   fetch(`${API_BASE}/rodina/lokace`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ code: s?.familyId, location })
+    body: JSON.stringify(familyAuth({ location }))
   }).catch(() => {});
   return store.saveProfile({ location });
 }
@@ -145,7 +184,7 @@ export async function updateProfile({ name, avatar }) {
   fetch(`${API_BASE}/rodina/profil`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ code: s?.familyId, memberId: s?.memberId, name, avatar })
+    body: JSON.stringify(familyAuth({ memberId: s?.memberId, name, avatar }))
   }).catch(() => {});
   return store.saveProfile({ userName: name, userAvatar: avatar });
 }
@@ -172,7 +211,11 @@ export async function getDashboard() {
 export async function getMembers() {
   const s = store.getSession();
   try {
-    const res = await fetch(`${API_BASE}/rodina/state?code=${encodeURIComponent(s?.familyId || '')}`, { headers: authHeaders() });
+    const res = await fetch(`${API_BASE}/rodina/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(familyAuth())
+    });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const map = Object.fromEntries(data.members.map((m) => [m.id, m]));
@@ -191,7 +234,7 @@ export async function addMember({ name, avatar }) {
     const res = await fetch(`${API_BASE}/rodina/clen`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ code: s?.familyId, name, avatar: avatar || 'px-person' })
+      body: JSON.stringify(familyAuth({ name, avatar: avatar || 'px-person' }))
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return (await res.json()).member;
@@ -200,20 +243,50 @@ export async function addMember({ name, avatar }) {
   }
 }
 
-/** Události kalendáře – pole { id, date:'RRRR-MM-DD', time, title, place? }. */
+/** Události kalendáře – načtené ze složky rodiny (udalosti.json). */
 export async function getEvents() {
-  await wait();
-  // TODO: return fetch(`${API_BASE}/kalendar/udalosti`, { headers: authHeaders() }).then(r => r.json());
-  return [...DEMO_EVENTS, ...store.getData().events].sort(
-    (a, b) => (a.date + a.time).localeCompare(b.date + b.time)
-  );
+  try {
+    const res = await fetch(`${API_BASE}/rodina/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(familyAuth())
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (Array.isArray(data.avatary)) store.setFamilyAvatars(data.avatary);
+    return (data.udalosti || []).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  } catch {
+    return [...DEMO_EVENTS, ...store.getData().events].sort(
+      (a, b) => (a.date + a.time).localeCompare(b.date + b.time)
+    );
+  }
 }
 
-/** Přidat událost do kalendáře. */
+/** Přidat událost – zapíše se do udalosti.json rodiny. */
 export async function addEvent({ date, time, title, place }) {
-  await wait(100);
-  // TODO: return fetch(`${API_BASE}/kalendar/udalosti`, { method:'POST', ... }).then(r => r.json());
-  return store.addEvent({ id: `e${Date.now()}`, date, time, title, place: place || '' });
+  const local = { id: `e${Date.now()}`, date, time, title, place: place || '' };
+  try {
+    const res = await fetch(`${API_BASE}/rodina/udalost`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(familyAuth({ date, time, title, place }))
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).event;
+  } catch {
+    return store.addEvent(local);
+  }
+}
+
+/** Uložit vlastní pixel avatar do složky rodiny (avatary.json). */
+export async function addFamilyAvatar({ token, name }) {
+  try {
+    await fetch(`${API_BASE}/rodina/avatar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(familyAuth({ token, name }))
+    });
+  } catch { /* offline – zůstane jen v zařízení */ }
 }
 
 /** Fotky – pole { id, url, caption }. */
@@ -227,7 +300,11 @@ export async function getPhotos() {
 export async function getMessages() {
   const s = store.getSession();
   try {
-    const res = await fetch(`${API_BASE}/rodina/state?code=${encodeURIComponent(s?.familyId || '')}`, { headers: authHeaders() });
+    const res = await fetch(`${API_BASE}/rodina/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(familyAuth())
+    });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return (await res.json()).messages;
   } catch {
@@ -243,7 +320,7 @@ export async function sendMessage(text, attachment = null) {
     const res = await fetch(`${API_BASE}/rodina/zprava`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ code: s?.familyId, memberId: s?.memberId, text, attachment })
+      body: JSON.stringify(familyAuth({ memberId: s?.memberId, text, attachment }))
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return (await res.json()).message;

@@ -1,6 +1,7 @@
 import { icon } from './icons.js';
 import { PIXEL_AVATARS, pixelData, PALETTE, customToken, rowsFromToken } from './pixel.js';
 import { addCustomAvatar, getCustomAvatars } from './store.js';
+import { addFamilyAvatar } from './api.js';
 import { escapeHtml } from './utils.js';
 
 /** Otevře modální okno. onMount dostane prvek okna pro připojení vlastních listenerů. */
@@ -88,20 +89,25 @@ export function bindAvatarPicker(root) {
     btn.addEventListener('click', () => {
       root.querySelectorAll('[data-avatar]').forEach((b) => b.classList.remove('selected'));
       btn.classList.add('selected');
-      const hidden = root.querySelector('input[name="avatar"]');
+      const picker = btn.closest('[data-avatar-picker]');
+      const hidden = picker?.parentElement.querySelector('input[name="avatar"]') || root.querySelector('input[name="avatar"]');
       if (hidden) hidden.value = btn.dataset.avatar;
     });
   });
   root.querySelectorAll('[data-action="make-avatar"]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const hidden = root.querySelector('input[name="avatar"]');
-      openAvatarMaker(hidden?.value || 'px-boy');
+      const picker = btn.closest('[data-avatar-picker]');
+      const hidden = picker?.parentElement.querySelector('input[name="avatar"]') || root.querySelector('input[name="avatar"]');
+      openAvatarMaker(hidden?.value || 'px-boy', picker);
     });
   });
 }
 
-/** Editor vlastního pixel-art avataru (12×12 bodů). */
-export function openAvatarMaker(current = 'px-boy', onSaved) {
+/**
+ * Editor vlastního pixel-art avataru (12×12 bodů). Běží ve vlastní vrstvě,
+ * aby nepřepsal případné modální okno (např. formulář profilu) pod ním.
+ */
+export function openAvatarMaker(current = 'px-boy', pickerEl = null, onSaved) {
   let rows = current.startsWith('pxc:')
     ? rowsFromToken(current)
     : Array.from({ length: 12 }, () => '.'.repeat(12));
@@ -112,74 +118,88 @@ export function openAvatarMaker(current = 'px-boy', onSaved) {
     `<button type="button" class="px-cell" data-x="${x}" data-y="${y}" style="background:${PALETTE[ch] || 'transparent'}"></button>`
   ).join('')).join('');
 
-  openModal('Vytvořit pixel avatar', `
-    <p class="modal-text">Klikáním malujte avatar. Vyberte barvu, pak jednotlivé čtverečky.</p>
-    <div class="px-editor">
-      <div class="px-grid" id="px-grid">${cells()}</div>
-      <div class="px-side">
-        <div class="px-preview"><img id="px-preview-img" src="" alt="Náhled"></div>
-        <div class="px-palette">
-          ${paletteKeys.map((k) => `<button type="button" class="px-color ${k === color ? 'selected' : ''}" data-color="${k}" style="background:${PALETTE[k]}" title="${k}"></button>`).join('')}
-          <button type="button" class="px-color px-empty ${color === '.' ? 'selected' : ''}" data-color="." title="Průhledné">×</button>
+  const host = document.createElement('div');
+  host.className = 'modal';
+  host.id = 'avatar-maker-modal';
+  host.innerHTML = `
+    <div class="modal-backdrop" data-maker-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Vytvořit pixel avatar">
+      <div class="modal-head">
+        <h2>Vytvořit pixel avatar</h2>
+        <button class="modal-close" data-maker-close aria-label="Zavřít">${icon('close')}</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-text">Klikáním malujte avatar. Vyberte barvu, pak jednotlivé čtverečky.</p>
+        <div class="px-editor">
+          <div class="px-grid">${cells()}</div>
+          <div class="px-side">
+            <div class="px-preview"><img class="px-preview-img" src="" alt="Náhled"></div>
+            <div class="px-palette">
+              ${paletteKeys.map((k) => `<button type="button" class="px-color ${k === color ? 'selected' : ''}" data-color="${k}" style="background:${PALETTE[k]}" title="${k}"></button>`).join('')}
+              <button type="button" class="px-color px-empty" data-color="." title="Průhledné">×</button>
+            </div>
+            <div class="px-tools">
+              <button type="button" class="btn btn-ghost btn-sm" id="px-clear">Vymazat</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="px-fill">Vyplnit</button>
+            </div>
+          </div>
         </div>
-        <div class="px-tools">
-          <button type="button" class="btn btn-ghost btn-sm" id="px-clear">Vymazat</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="px-fill">Vyplnit</button>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-maker-close>Zrušit</button>
+          <button type="button" class="btn btn-primary" id="px-save">${icon('check')} Uložit avatar</button>
         </div>
       </div>
-    </div>
-    <div class="modal-actions">
-      <button type="button" class="btn btn-ghost" data-close>Zrušit</button>
-      <button type="button" class="btn btn-primary" id="px-save">${icon('check')} Uložit avatar</button>
-    </div>`, (box) => {
-    const grid = box.querySelector('#px-grid');
-    const preview = box.querySelector('#px-preview-img');
-    const refreshPreview = () => { preview.src = pixelData(customToken(rows)); };
+    </div>`;
+  document.body.appendChild(host);
+
+  const close = () => host.remove();
+  host.querySelectorAll('[data-maker-close]').forEach((el) => el.addEventListener('click', close));
+
+  const grid = host.querySelector('.px-grid');
+  const preview = host.querySelector('.px-preview-img');
+  const refreshPreview = () => { preview.src = pixelData(customToken(rows)); };
+  refreshPreview();
+
+  grid.addEventListener('click', (e) => {
+    const btn = e.target.closest('.px-cell');
+    if (!btn) return;
+    const x = Number(btn.dataset.x);
+    const y = Number(btn.dataset.y);
+    rows[y] = rows[y].slice(0, x) + color + rows[y].slice(x + 1);
+    btn.style.background = PALETTE[color] || 'transparent';
     refreshPreview();
+  });
 
-    const paint = (btn) => {
-      const x = Number(btn.dataset.x);
-      const y = Number(btn.dataset.y);
-      rows[y] = rows[y].slice(0, x) + color + rows[y].slice(x + 1);
-      btn.style.background = PALETTE[color] || 'transparent';
-      refreshPreview();
-    };
-    grid.addEventListener('click', (e) => {
-      const btn = e.target.closest('.px-cell');
-      if (btn) paint(btn);
+  host.querySelectorAll('[data-color]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      color = btn.dataset.color;
+      host.querySelectorAll('[data-color]').forEach((b) => b.classList.toggle('selected', b === btn));
     });
+  });
 
-    box.querySelectorAll('[data-color]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        color = btn.dataset.color;
-        box.querySelectorAll('[data-color]').forEach((b) => b.classList.toggle('selected', b === btn));
-      });
-    });
+  host.querySelector('#px-clear').addEventListener('click', () => {
+    rows = Array.from({ length: 12 }, () => '.'.repeat(12));
+    grid.innerHTML = cells();
+    refreshPreview();
+  });
+  host.querySelector('#px-fill').addEventListener('click', () => {
+    rows = Array.from({ length: 12 }, () => color.repeat(12));
+    grid.innerHTML = cells();
+    refreshPreview();
+  });
 
-    box.querySelector('#px-clear').addEventListener('click', () => {
-      rows = Array.from({ length: 12 }, () => '.'.repeat(12));
-      grid.innerHTML = cells();
-      refreshPreview();
-    });
-    box.querySelector('#px-fill').addEventListener('click', () => {
-      rows = Array.from({ length: 12 }, () => color.repeat(12));
-      grid.innerHTML = cells();
-      refreshPreview();
-    });
-
-    box.querySelector('#px-save').addEventListener('click', () => {
-      const token = customToken(rows);
-      addCustomAvatar({ id: token, token, name: 'Vlastní avatar' });
-      const picker = document.querySelector('[data-avatar-picker]');
-      if (picker) {
-        picker.innerHTML = renderAvatarOptions(token);
-        const hidden = picker.parentElement.querySelector('input[name="avatar"]');
-        if (hidden) hidden.value = token;
-        bindAvatarPicker(document);
-      }
-      closeModal();
-      toast('Vlastní pixel avatar byl vytvořen.');
-      onSaved?.(token);
-    });
+  host.querySelector('#px-save').addEventListener('click', () => {
+    const token = customToken(rows);
+    addCustomAvatar({ id: token, token, name: 'Vlastní avatar' });
+    addFamilyAvatar({ token, name: 'Vlastní avatar' });
+    if (pickerEl?.isConnected) {
+      pickerEl.innerHTML = renderAvatarOptions(token);
+      const hidden = pickerEl.parentElement.querySelector('input[name="avatar"]');
+      if (hidden) hidden.value = token;
+      bindAvatarPicker(document);
+    }
+    close();
+    toast('Vlastní pixel avatar byl vytvořen.');
+    onSaved?.(token);
   });
 }

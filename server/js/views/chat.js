@@ -2,8 +2,8 @@ import { icon } from '../icons.js';
 import { getMessages, getMembers, sendMessage, uploadFile, getMyId } from '../api.js';
 import { rerender } from '../app.js';
 import { escapeHtml, timeLabel } from '../utils.js';
-import { avatarHtml, renderText } from '../pixel.js';
-import { attachmentHtml } from '../ui.js';
+import { avatarHtml, renderText, GLYPH_EMOJI, pixelGlyph } from '../pixel.js';
+import { attachmentHtml, openModal } from '../ui.js';
 
 export const title = 'Rodinný chat';
 
@@ -27,6 +27,7 @@ export async function render() {
           }).join('')}
         </div>
         <form class="chat-form" id="chat-form">
+          <button type="button" class="chat-clip" id="chat-emoji" aria-label="Pixel smajlíci">${icon('smile')}</button>
           <button type="button" class="chat-clip" id="chat-clip" aria-label="Přiložit soubor">${icon('upload')}</button>
           <input id="chat-input" type="text" placeholder="Napište zprávu…" autocomplete="off" maxlength="500">
           <button type="submit" aria-label="Odeslat">${icon('send')}</button>
@@ -52,6 +53,25 @@ export function mount() {
     await sendMessage(text);
     rerender();
     requestAnimationFrame(() => document.getElementById('chat-input')?.focus());
+  });
+
+  document.getElementById('chat-emoji').addEventListener('click', () => {
+    openModal('Pixel smajlíci', `
+      <p class="modal-text">Vyberte obrázek – vloží se do zprávy a zobrazí se jako pixel art.</p>
+      <div class="emoji-picker">
+        ${Object.entries(GLYPH_EMOJI).map(([name, emoji]) => `
+          <button type="button" class="emoji-option" data-emoji="${emoji}" title="${name}">
+            <img src="${pixelGlyph(name)}" alt="${name}">
+          </button>`).join('')}
+      </div>`, (box) => {
+      box.querySelectorAll('[data-emoji]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          input.value += btn.dataset.emoji;
+          document.querySelector('.modal .modal-close')?.click();
+          input.focus();
+        });
+      });
+    });
   });
 
   document.getElementById('chat-clip').addEventListener('click', () => fileInput.click());

@@ -1,4 +1,5 @@
 import { getPrefs, savePrefs } from './store.js';
+import { saveFamilySettings } from './api.js';
 
 export const THEMES = {
   light: { label: 'Světlé', bg: '#eef1f8', surface: '#ffffff', surface2: '#f7f8fc', text: '#1f2540', muted: '#8b93ab', line: '#eceef5' },
@@ -48,4 +49,6 @@ export function applyAppearance() {
 export function setAppearance(patch) {
   savePrefs(patch);
   applyAppearance();
+  // Nastavení se vždy odešle do složky rodiny (nastaveni.json).
+  saveFamilySettings(patch);
 }

@@ -233,8 +233,41 @@ function handleFilesUpload(req, res) {
 }
 
 /* --------------------------- Sdílená rodina -------------------------------- */
+/*
+ * Každá rodina má vlastní složku:
+ *   data/rodiny/<KOD>/heslo.txt        – heslo rodiny
+ *                 nastaveni.json      – název, lokalita, nastavení z aplikace
+ *                 clenove.json        – členové
+ *                 zpravy.json         – sdílený chat
+ * Rodina se najde podle kódu; heslo se musí shodovat. Tak se dvě zařízení
+ * se stejným kódem a heslem vždy podívají na stejná data.
+ */
 
-function readFamilies() { return readStore(FAMILY_FILE, {}); }
+const FAMILY_DIR = path.join(DATA_DIR, 'rodiny');
+if (!fs.existsSync(FAMILY_DIR)) fs.mkdirSync(FAMILY_DIR, { recursive: true });
+
+function safeCode(code) {
+  return String(code || '').trim().toUpperCase().replace(/[^A-Z0-9\-_]/g, '');
+}
+function familyDir(code) { return path.join(FAMILY_DIR, safeCode(code)); }
+function familyFile(code, name) { return path.join(familyDir(code), name); }
+
+function readFamilyFile(code, name, fallback) {
+  try { return JSON.parse(fs.readFileSync(familyFile(code, name), 'utf8')); }
+  catch { return fallback; }
+}
+function writeFamilyFile(code, name, value, cb) {
+  fs.mkdirSync(familyDir(code), { recursive: true });
+  fs.writeFile(familyFile(code, name), JSON.stringify(value, null, 2), cb || (() => {}));
+}
+function readPassword(code) {
+  try { return fs.readFileSync(familyFile(code, 'heslo.txt'), 'utf8').trim(); }
+  catch { return null; }
+}
+function writePassword(code, password) {
+  fs.mkdirSync(familyDir(code), { recursive: true });
+  fs.writeFileSync(familyFile(code, 'heslo.txt'), String(password).slice(0, 100));
+}
 
 function seedMembers() {
   return [
@@ -245,7 +278,6 @@ function seedMembers() {
     { id: 'babicka', name: 'Babička', avatar: 'px-grandma' }
   ];
 }
-
 function seedMessages() {
   const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
   return [
@@ -255,56 +287,133 @@ function seedMessages() {
   ];
 }
 
+function loadFamily(code) {
+  if (!fs.existsSync(familyDir(code))) return null;
+  const settings = readFamilyFile(code, 'nastaveni.json', null);
+  if (!settings) return null;
+  return {
+    settings,
+    members: readFamilyFile(code, 'clenove.json', []),
+    messages: readFamilyFile(code, 'zpravy.json', []),
+    events: readFamilyFile(code, 'udalosti.json', []),
+    avatars: readFamilyFile(code, 'avatary.json', [])
+  };
+}
+
+function saveFamily(code, fam, cb) {
+  writeFamilyFile(code, 'nastaveni.json', fam.settings, () => {
+    writeFamilyFile(code, 'clenove.json', fam.members, () => {
+      writeFamilyFile(code, 'zpravy.json', fam.messages, () => {
+        writeFamilyFile(code, 'udalosti.json', fam.events || [], () => {
+          writeFamilyFile(code, 'avatary.json', fam.avatars || [], cb);
+        });
+      });
+    });
+  });
+}
+
+/** Migrace starších dat z data/rodiny.json do složek (když uživatel měl rodinu dřív). */
+function migrateLegacyFamilies() {
+  const legacy = readStore(FAMILY_FILE, {});
+  Object.entries(legacy).forEach(([code, fam]) => {
+    const safe = safeCode(code);
+    if (!safe || fs.existsSync(familyDir(safe))) return;
+    fs.mkdirSync(familyDir(safe), { recursive: true });
+    writePassword(safe, 'heslo');
+    writeFamilyFile(safe, 'nastaveni.json', { name: fam.name || safe, location: fam.location || 'Praha', createdAt: new Date().toISOString(), nastaveni: {} });
+    writeFamilyFile(safe, 'clenove.json', fam.members || []);
+    writeFamilyFile(safe, 'zpravy.json', fam.messages || []);
+    writeFamilyFile(safe, 'udalosti.json', []);
+    writeFamilyFile(safe, 'avatary.json', []);
+    console.log(`Migrace rodiny ${safe} ze stareho souboru do slozky.`);
+  });
+}
+migrateLegacyFamilies();
+
 function handleFamily(req, res, action) {
-  const url = new URL(req.url, 'http://localhost');
-  const queryCode = url.searchParams.get('code') || '';
   readJson(req, 1_000_000, (err, payload) => {
     if (err) { send(res, 400, { ok: false, error: 'Neplatné JSON' }); return; }
-    const code = String(payload.code || queryCode || '').trim().toUpperCase();
+    const code = safeCode(payload.code);
     if (!code) { send(res, 400, { ok: false, error: 'Chybí kód rodiny' }); return; }
-    const families = readFamilies();
-    const fam = families[code];
+    const password = String(payload.password || '');
+    const creating = action === 'join' && payload.create === true;
+
+    let fam = loadFamily(code);
+
+    if (creating) {
+      if (fam) { send(res, 409, { ok: false, error: 'Rodina s tímto kódem už existuje. Použijte „Připojit se".' }); return; }
+      if (!password) { send(res, 400, { ok: false, error: 'Zadejte heslo rodiny' }); return; }
+      const settings = {
+        name: String(payload.familyName || code).slice(0, 80),
+        location: String(payload.location || 'Praha').slice(0, 80),
+        createdAt: new Date().toISOString(),
+        nastaveni: payload.nastaveni || {}
+      };
+      const members = seedMembers();
+      const messages = seedMessages();
+      const events = [];
+      const avatars = [];
+      writePassword(code, password);
+      writeFamilyFile(code, 'nastaveni.json', settings);
+      writeFamilyFile(code, 'clenove.json', members);
+      writeFamilyFile(code, 'zpravy.json', messages);
+      writeFamilyFile(code, 'udalosti.json', events);
+      writeFamilyFile(code, 'avatary.json', avatars);
+      fam = { settings, members, messages, events, avatars };
+    } else {
+      // Změna hesla / uložení nastavení musí fungovat i když složka ještě neexistuje.
+    if (!fam && (action === 'password' || action === 'nastaveni')) {
+      const settings = { name: code, location: 'Praha', createdAt: new Date().toISOString(), nastaveni: {} };
+      if (!fs.existsSync(familyDir(code))) {
+        writeFamilyFile(code, 'nastaveni.json', settings);
+        writeFamilyFile(code, 'clenove.json', seedMembers());
+        writeFamilyFile(code, 'zpravy.json', seedMessages());
+        writeFamilyFile(code, 'udalosti.json', []);
+        writeFamilyFile(code, 'avatary.json', []);
+      }
+      if (action === 'password') {
+        const next = String(payload.passwordNew || '').slice(0, 100);
+        if (!next) { send(res, 400, { ok: false, error: 'Nové heslo je prázdné' }); return; }
+        writePassword(code, next);
+        send(res, 200, { ok: true });
+      } else {
+        const cur = loadFamily(code) || { settings, members: [], messages: [], events: [], avatars: [] };
+        cur.settings.nastaveni = { ...(cur.settings.nastaveni || {}), ...(payload.nastaveni || {}) };
+        saveFamily(code, cur, () => send(res, 200, { ok: true, nastaveni: cur.settings.nastaveni }));
+      }
+      return;
+    }
+
+    if (!fam) { send(res, 404, { ok: false, error: 'Rodina s tímto kódem neexistuje. Zkontrolujte kód.' }); return; }
+      if (readPassword(code) !== password) { send(res, 403, { ok: false, error: 'Špatné heslo rodiny.' }); return; }
+    }
 
     if (action === 'join') {
-      if (!fam) {
-        families[code] = {
-          name: String(payload.familyName || code).slice(0, 80),
-          location: String(payload.location || 'Praha').slice(0, 80),
-          members: seedMembers(),
-          messages: seedMessages(),
-          createdAt: new Date().toISOString()
-        };
-      } else {
-        fam.name = String(payload.familyName || fam.name).slice(0, 80);
-        if (payload.location) fam.location = String(payload.location).slice(0, 80);
-      }
-      const f = families[code];
       const wanted = String(payload.memberId || '').trim();
-      let member = f.members.find((m) => m.id === wanted);
+      let member = fam.members.find((m) => m.id === wanted);
       if (!member) {
         member = { id: `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: String(payload.userName || 'Já').slice(0, 60), avatar: payload.userAvatar || 'px-boy' };
-        f.members.push(member);
+        fam.members.push(member);
       } else {
         member.name = String(payload.userName || member.name).slice(0, 60);
         member.avatar = payload.userAvatar || member.avatar;
       }
-      writeStore(FAMILY_FILE, families, res, () => ({
-        ok: true, familyId: code, familyName: f.name, location: f.location,
-        memberId: member.id, members: f.members, messages: f.messages
+      saveFamily(code, fam, () => send(res, 200, {
+        ok: true, familyId: code, familyName: fam.settings.name, location: fam.settings.location,
+        memberId: member.id, folder: `data/rodiny/${safeCode(code)}/`,
+        members: fam.members, messages: fam.messages, udalosti: fam.events || [], avatary: fam.avatars || []
       }));
       return;
     }
 
-    if (!fam) { send(res, 404, { ok: false, error: 'Rodina s tímto kódem neexistuje' }); return; }
-
     if (action === 'state') {
-      send(res, 200, { ok: true, familyId: code, familyName: fam.name, location: fam.location, members: fam.members, messages: fam.messages });
+      send(res, 200, { ok: true, familyId: code, familyName: fam.settings.name, location: fam.settings.location, folder: `data/rodiny/${safeCode(code)}/`, members: fam.members, messages: fam.messages, udalosti: fam.events || [], avatary: fam.avatars || [] });
       return;
     }
     if (action === 'member') {
       const m = { id: `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: String(payload.name || 'Člen').slice(0, 60), avatar: payload.avatar || 'px-person' };
       fam.members.push(m);
-      writeStore(FAMILY_FILE, families, res, () => ({ ok: true, member: m, members: fam.members }));
+      saveFamily(code, fam, () => send(res, 200, { ok: true, member: m, members: fam.members }));
       return;
     }
     if (action === 'message') {
@@ -316,7 +425,7 @@ function handleFamily(req, res, action) {
         at: new Date().toISOString()
       };
       fam.messages.push(msg);
-      writeStore(FAMILY_FILE, families, res, () => ({ ok: true, message: msg }));
+      saveFamily(code, fam, () => send(res, 200, { ok: true, message: msg }));
       return;
     }
     if (action === 'profile') {
@@ -324,12 +433,49 @@ function handleFamily(req, res, action) {
       if (!member) { send(res, 404, { ok: false, error: 'Člen nenalezen' }); return; }
       member.name = String(payload.name || member.name).slice(0, 60);
       member.avatar = payload.avatar || member.avatar;
-      writeStore(FAMILY_FILE, families, res, () => ({ ok: true, members: fam.members }));
+      saveFamily(code, fam, () => send(res, 200, { ok: true, members: fam.members }));
       return;
     }
     if (action === 'location') {
-      fam.location = String(payload.location || 'Praha').slice(0, 80);
-      writeStore(FAMILY_FILE, families, res, () => ({ ok: true, location: fam.location }));
+      fam.settings.location = String(payload.location || 'Praha').slice(0, 80);
+      saveFamily(code, fam, () => send(res, 200, { ok: true, location: fam.settings.location }));
+      return;
+    }
+    if (action === 'udalost') {
+      const ev = {
+        id: `e_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        date: String(payload.date || ''),
+        time: String(payload.time || '00:00'),
+        title: String(payload.title || 'Událost').slice(0, 120),
+        place: String(payload.place || '').slice(0, 120)
+      };
+      fam.events = fam.events || [];
+      fam.events.push(ev);
+      saveFamily(code, fam, () => send(res, 200, { ok: true, event: ev, udalosti: fam.events }));
+      return;
+    }
+    if (action === 'avatar') {
+      const av = {
+        id: String(payload.id || `a_${Date.now()}`).slice(0, 400),
+        token: String(payload.token || '').slice(0, 400),
+        name: String(payload.name || 'Vlastní avatar').slice(0, 80)
+      };
+      fam.avatars = fam.avatars || [];
+      if (!fam.avatars.some((a) => a.token === av.token)) fam.avatars.push(av);
+      saveFamily(code, fam, () => send(res, 200, { ok: true, avatary: fam.avatars }));
+      return;
+    }
+    if (action === 'nastaveni') {
+      fam.settings.nastaveni = { ...(fam.settings.nastaveni || {}), ...(payload.nastaveni || {}) };
+      fam.settings.updatedAt = new Date().toISOString();
+      saveFamily(code, fam, () => send(res, 200, { ok: true, nastaveni: fam.settings.nastaveni }));
+      return;
+    }
+    if (action === 'password') {
+      const next = String(payload.passwordNew || '').slice(0, 100);
+      if (!next) { send(res, 400, { ok: false, error: 'Nové heslo je prázdné' }); return; }
+      writePassword(code, next);
+      send(res, 200, { ok: true });
       return;
     }
     send(res, 405, { ok: false, error: 'Neznámá akce' });
@@ -408,7 +554,7 @@ const server = http.createServer((req, res) => {
   }
   if (pathname.startsWith('/api/rodina/')) {
     const action = pathname.split('/')[3];
-    const map = { join: 'join', state: 'state', clen: 'member', zprava: 'message', profil: 'profile', lokace: 'location' };
+    const map = { join: 'join', state: 'state', clen: 'member', zprava: 'message', profil: 'profile', lokace: 'location', nastaveni: 'nastaveni', heslo: 'password', udalost: 'udalost', avatar: 'avatar' };
     if (map[action]) handleFamily(req, res, map[action]);
     else send(res, 404, { ok: false, error: 'Neznámý endpoint rodiny' });
     return;

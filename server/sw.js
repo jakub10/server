@@ -4,7 +4,7 @@
  * Data (kalendář, zprávy, počasí) se v budoucnu budou načítat ze serveru,
  * takže pro API volání používejte síť ("network first"), viz níže.
  */
-const CACHE = 'rodina-v6';
+const CACHE = 'rodina-v9';
 
 const SHELL = [
   './',
@@ -27,6 +27,7 @@ const SHELL = [
   './js/views/chat.js',
   './js/views/weather.js',
   './js/views/files.js',
+  './js/views/tv.js',
   './js/views/settings.js',
   './icons/icon.svg'
 ];

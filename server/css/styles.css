@@ -494,8 +494,10 @@ button { cursor: pointer; border: none; background: none; }
 .ai-status .card-title { flex-wrap: wrap; }
 .ai-status-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .ai-status-row .pill .icon { width: 13px; height: 13px; }
-.msg.bot .bubble { background: var(--primary-soft); color: var(--text); border-radius: 16px 16px 16px 5px; }
-.msg.bot .avatar { background: var(--primary-soft); }
+.msg.bot .bubble { background: #e9ecff; color: #1f2540; border-radius: 16px 16px 16px 5px; }
+.msg.bot .meta { color: #6b7391; }
+.msg.bot .avatar { background: #e9ecff; }
+.ai-status, .ai-status .card-title, .ai-status p { color: var(--text); }
 
 /* ---------- Galerie: hledání, nahrávání, videa ---------- */
 .photos-toolbar { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
@@ -551,6 +553,15 @@ button { cursor: pointer; border: none; background: none; }
 .appearance-label { font-size: 12px; font-weight: 700; color: var(--muted); margin: 12px 0 8px; }
 .appearance-label:first-child { margin-top: 0; }
 
+/* ---------- Pixel smajlíci v chatu ---------- */
+.emoji-picker { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.emoji-option { aspect-ratio: 1; border-radius: 10px; background: var(--surface-2); display: grid; place-items: center; }
+.emoji-option img { width: 70%; height: 70%; image-rendering: pixelated; }
+
+/* ---------- Televize ---------- */
+.tv-buttons { display: flex; gap: 10px; }
+.tv-buttons .btn { flex: 1; }
+
 /* ---------- Soubory ---------- */
 .file-filter { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 10px; -webkit-overflow-scrolling: touch; }
 .filter-chip {
@@ -560,7 +571,11 @@ button { cursor: pointer; border: none; background: none; }
 .filter-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .file-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
 .file-row + .file-row { border-top: 1px solid var(--line); }
-.file-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); flex: 0 0 auto; }
+.file-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); flex: 0 0 34px; }
+.photo-strip { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+.photo-strip-item { flex: 0 0 74px; min-width: 0; text-align: center; text-decoration: none; color: var(--text); }
+.photo-strip-item img { width: 74px; height: 74px; object-fit: cover; border-radius: 10px; display: block; }
+.photo-strip-item span { display: block; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
 .file-icon .icon { width: 19px; height: 19px; }
 .file-meta { min-width: 0; flex: 1; }
 .file-name { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

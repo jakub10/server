@@ -1,0 +1,34 @@
+[
+  {
+    "id": "m1",
+    "from": "mamka",
+    "text": "Dobrý den všichni! Dnes večer máme doma večeři 🍝",
+    "at": "2026-11-22T11:38:01.091Z"
+  },
+  {
+    "id": "m2",
+    "from": "eliska",
+    "text": "Jdu domů ze školy, může mi někdo otevřít?",
+    "at": "2026-11-22T11:49:01.091Z"
+  },
+  {
+    "id": "m3",
+    "from": "tata",
+    "text": "V sobotu jedeme na výlet, nezapomeňte na pláštěnky 🌦️",
+    "at": "2026-11-22T12:18:01.091Z"
+  },
+  {
+    "id": "msg_mwrtk3hyrfil",
+    "from": "m_mwrtjpiw0ctc",
+    "text": "ahoj",
+    "attachment": null,
+    "at": "2026-11-22T12:34:38.134Z"
+  },
+  {
+    "id": "msg_mwrtkexax6uk",
+    "from": "m_mwrte5qkpd70",
+    "text": "čau",
+    "attachment": null,
+    "at": "2026-11-22T12:34:52.942Z"
+  }
+]
