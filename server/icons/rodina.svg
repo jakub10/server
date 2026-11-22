@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 704 528">
+  <defs>
+    <clipPath id="outer">
+      <circle cx="370.5" cy="263" r="255"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#outer)">
+    <circle cx="370.5" cy="263" r="255" fill="#0bb8e8"/>
+
+    <!-- Hlavy -->
+    <circle cx="217.5" cy="175.5" r="73.5" fill="#1096b2"/>
+    <circle cx="493" cy="152" r="72.5" fill="#a9eafa"/>
+    <circle cx="364" cy="170" r="74.5" fill="#ffffff"/>
+
+    <!-- Levé tělo -->
+    <circle cx="227" cy="369" r="113" fill="#1096b2"/>
+    <path fill="#1096b2" d="
+      M 116 365
+      C 135 420 184 473 263 497
+      L 280 430 L 275 355 Z"/>
+
+    <!-- Pravé tělo -->
+    <circle cx="512" cy="357" r="112" fill="#a9eafa"/>
+    <path fill="#a9eafa" d="
+      M 420 310
+      C 480 330 510 397 512 479
+      C 560 454 605 400 625 345
+      L 580 290 Z"/>
+
+    <!-- Prostřední bílé tělo -->
+    <path fill="#ffffff" d="
+      M 377 270
+      C 426 270 467 299 484 342
+      C 502 381 515 426 511 477
+      C 507 520 494 550 470 570
+      L 240 570
+      C 255 540 259 515 261 494
+      C 264 447 269 388 279 347
+      C 293 301 333 270 377 270 Z"/>
+  </g>
+</svg>
